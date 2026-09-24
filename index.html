@@ -88,15 +88,6 @@
 
   .header-btn:hover { background: var(--sage); }
   .header-btn svg { flex-shrink: 0; }
-  .header-btn.admin-on { background: #142F70; color: var(--white); border-color: #142F70; }
-
-  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .btn-approve { background: var(--ok-soft); color: var(--ok); padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; }
-  .btn-approve:hover { background: #D3E9D8; }
-  .btn-reject { background: #F6E7E5; color: #A83A2E; padding: 5px 12px; font-size: 0.8rem; border-radius: 6px; }
-  .btn-reject:hover { background: #F0D2CE; }
-  .badge.reject { background: #F6E7E5; color: #A83A2E; }
-  .stock-low { color: #B23A2E; font-weight: 700; }
 
   main {
     max-width: 960px;
@@ -433,10 +424,6 @@
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
       Status Upload
     </button>
-    <button type="button" id="adminBtn" class="header-btn">
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-      <span id="adminBtnLabel">Masuk Admin</span>
-    </button>
   </div>
 </header>
 
@@ -497,13 +484,6 @@
       <div class="empty-state">Memuat data…</div>
     </div>
   </section>
-
-  <section class="panel" id="stockPanel" style="display:none;">
-    <h2>Stock Parts (Admin)</h2>
-    <div id="stockWrap">
-      <div class="empty-state">Memuat data…</div>
-    </div>
-  </section>
 </main>
 
 <div class="modal-backdrop" id="editModal">
@@ -517,22 +497,6 @@
     <div class="modal-actions">
       <button class="btn-cancel" id="editModalCancel">Batal</button>
       <button class="btn-primary" id="editModalSave">Simpan</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="adminPinModal">
-  <div class="modal">
-    <h3>Masuk sebagai Admin</h3>
-    <p>Masukkan PIN admin untuk approve/reject request dan kelola stock.</p>
-    <div class="field">
-      <label for="adminPinInput">PIN Admin</label>
-      <input type="password" id="adminPinInput" placeholder="Masukkan PIN">
-    </div>
-    <p class="status-msg error" id="adminPinError" style="display:none;">PIN salah, coba lagi.</p>
-    <div class="modal-actions">
-      <button class="btn-cancel" id="adminPinCancel">Batal</button>
-      <button class="btn-primary" id="adminPinSubmit">Masuk</button>
     </div>
   </div>
 </div>
@@ -1632,141 +1596,6 @@
     return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
-  // ==== ADMIN MODE ====
-  // PIN ini hanya gerbang tampilan di sisi staff. Yang benar-benar memvalidasi
-  // approve/reject/ubah stock adalah ADMIN_PASSWORD di Script Properties (Code.gs).
-  // Isi ADMIN_PIN di bawah ini SAMA dengan ADMIN_PASSWORD di Script Properties.
-  const ADMIN_PIN = '12345';
-  let isAdmin = false;
-  let adminPassword = '';
-
-  const adminBtn = document.getElementById('adminBtn');
-  const adminBtnLabel = document.getElementById('adminBtnLabel');
-  const adminPinModal = document.getElementById('adminPinModal');
-  const adminPinInput = document.getElementById('adminPinInput');
-  const adminPinError = document.getElementById('adminPinError');
-  const adminPinCancel = document.getElementById('adminPinCancel');
-  const adminPinSubmit = document.getElementById('adminPinSubmit');
-  const stockPanel = document.getElementById('stockPanel');
-
-  adminBtn.addEventListener('click', function () {
-    if (isAdmin) {
-      isAdmin = false;
-      adminPassword = '';
-      adminBtn.classList.remove('admin-on');
-      adminBtnLabel.textContent = 'Masuk Admin';
-      stockPanel.style.display = 'none';
-      loadRequests();
-      return;
-    }
-    adminPinInput.value = '';
-    adminPinError.style.display = 'none';
-    adminPinModal.classList.add('open');
-    adminPinInput.focus();
-  });
-
-  adminPinCancel.addEventListener('click', function () {
-    adminPinModal.classList.remove('open');
-  });
-
-  function tryAdminLogin() {
-    const val = adminPinInput.value.trim();
-    if (!val) return;
-    if (val !== ADMIN_PIN) {
-      adminPinError.style.display = 'block';
-      return;
-    }
-    isAdmin = true;
-    adminPassword = val;
-    adminBtn.classList.add('admin-on');
-    adminBtnLabel.textContent = 'Admin (Keluar)';
-    adminPinModal.classList.remove('open');
-    daftarRequestPanel.style.display = 'block';
-    stockPanel.style.display = 'block';
-    loadRequests();
-    loadStock();
-  }
-
-  adminPinSubmit.addEventListener('click', tryAdminLogin);
-  adminPinInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryAdminLogin(); });
-
-  async function loadStock() {
-    if (!isConfigured() || !isAdmin) return;
-    const stockWrap = document.getElementById('stockWrap');
-    try {
-      const res = await fetch(WEB_APP_URL + '?type=stock');
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error || 'Gagal memuat stock');
-      renderStock(json.data);
-    } catch (err) {
-      stockWrap.innerHTML = '<div class="empty-state">Gagal memuat stock: ' + err.message + '</div>';
-    }
-  }
-
-  function renderStock(rows) {
-    const stockWrap = document.getElementById('stockWrap');
-    if (!rows || rows.length === 0) {
-      stockWrap.innerHTML = '<div class="empty-state">Belum ada data stock.</div>';
-      return;
-    }
-    let html = '<table><thead><tr><th>Kode</th><th>Nama Part</th><th>Stock</th><th></th></tr></thead><tbody>';
-    rows.forEach(function (s) {
-      const low = Number(s.stock) <= 0;
-      html += '<tr>' +
-        '<td data-label="Kode">' + escapeHtml(s.kode) + '</td>' +
-        '<td data-label="Nama Part">' + escapeHtml(s.nama) + '</td>' +
-        '<td data-label="Stock"><span class="' + (low ? 'stock-low' : '') + '">' + escapeHtml(s.stock) + '</span></td>' +
-        '<td data-label=""><button class="resi-btn" data-stock-kode="' + escapeAttr(s.kode) + '" data-stock-nama="' + escapeAttr(s.nama) + '" data-stock-current="' + escapeAttr(s.stock) + '">Ubah</button></td>' +
-        '</tr>';
-    });
-    html += '</tbody></table>';
-    stockWrap.innerHTML = html;
-
-    stockWrap.querySelectorAll('[data-stock-kode]').forEach(function (btn) {
-      btn.addEventListener('click', async function () {
-        const kode = btn.getAttribute('data-stock-kode');
-        const nama = btn.getAttribute('data-stock-nama');
-        const current = btn.getAttribute('data-stock-current');
-        const val = prompt('Set jumlah stock untuk ' + kode + ' — ' + nama + ':', current);
-        if (val === null) return;
-        const num = Number(val);
-        if (isNaN(num)) { alert('Jumlah harus angka.'); return; }
-        try {
-          const res = await fetch(WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: 'updateStock', kode: kode, nama: nama, stock: num, adminPassword: adminPassword }) });
-          const json = await res.json();
-          if (!json.ok) throw new Error(json.error || 'Gagal');
-          loadStock();
-        } catch (err) {
-          alert('Gagal: ' + err.message);
-        }
-      });
-    });
-  }
-
-  function statusBadge(status) {
-    if (status === 'Disetujui') return '<span class="badge ok">Disetujui</span>';
-    if (status === 'Ditolak') return '<span class="badge reject">Ditolak</span>';
-    return '<span class="badge pending">Pending</span>';
-  }
-
-  async function handleApproveReject(action, id, btn) {
-    btn.disabled = true;
-    try {
-      const res = await fetch(WEB_APP_URL, { method: 'POST', body: JSON.stringify({ action: action, id: id, adminPassword: adminPassword }) });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error || 'Gagal');
-      if (json.stockWarnings && json.stockWarnings.length) {
-        alert('Selesai, tapi ada catatan stock:\n\n' + json.stockWarnings.join('\n'));
-      }
-      loadRequests();
-      loadStock();
-    } catch (err) {
-      alert('Gagal: ' + err.message);
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
   async function loadRequests() {
     if (!isConfigured()) {
       configWarning.style.display = 'block';
@@ -1774,7 +1603,7 @@
       return;
     }
     try {
-      const res = await fetch(WEB_APP_URL + '?type=requests');
+      const res = await fetch(WEB_APP_URL);
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || 'Gagal memuat data');
       renderTable(json.data);
@@ -1791,14 +1620,13 @@
 
     let html = '<table><thead><tr>' +
       '<th>Nama</th><th>Lokasi</th><th>No Kursi</th><th>Alamat Diterima</th>' +
-      '<th>Parts</th><th>Foto</th><th>Status</th><th>No Resi</th><th>Progres</th>' +
+      '<th>Parts</th><th>Foto</th><th>No Resi</th><th>Progres</th>' +
       '</tr></thead><tbody>';
 
     rows.forEach(function (r) {
       const hasResi = r.noResi && String(r.noResi).trim() !== '';
       const hasFoto = r.fotoId && String(r.fotoId).trim() !== '';
       const hasProgres = r.progres && String(r.progres).trim() !== '';
-      const status = r.status || 'Pending';
       html += '<tr>' +
         '<td data-label="Nama">' + escapeHtml(r.nama) + '</td>' +
         '<td data-label="Lokasi">' + escapeHtml(r.lokasi) + '</td>' +
@@ -1811,31 +1639,21 @@
                 '<img class="foto-thumb" src="https://drive.google.com/thumbnail?id=' + encodeURIComponent(r.fotoId) + '&sz=w150" alt="Foto request"></a>'
             : '<span class="hint-text">—</span>') +
         '</td>' +
-        '<td data-label="Status">' + statusBadge(status) +
-          (isAdmin ? '<div class="row-actions">' +
-            (status === 'Pending' ? '<button class="btn-approve" data-approve-id="' + r.id + '">Approve</button>' : '') +
-            (status !== 'Ditolak' ? '<button class="btn-reject" data-reject-id="' + r.id + '">Reject</button>' : '') +
-          '</div>' : '') +
-        '</td>' +
         '<td data-label="No Resi">' +
           (hasResi
             ? '<span class="badge ok">' + escapeHtml(r.noResi) + '</span>'
             : '<span class="badge pending">Belum diisi</span>') +
-          (isAdmin
-            ? '<button class="resi-btn field-edit-btn" data-field="noResi" data-id="' + r.id + '" data-nama="' + escapeAttr(r.nama) + '" data-value="' + escapeAttr(r.noResi || '') + '">' +
-                (hasResi ? 'Ubah' : 'Isi') +
-              '</button>'
-            : '') +
+          '<button class="resi-btn field-edit-btn" data-field="noResi" data-id="' + r.id + '" data-nama="' + escapeAttr(r.nama) + '" data-value="' + escapeAttr(r.noResi || '') + '">' +
+            (hasResi ? 'Ubah' : 'Isi') +
+          '</button>' +
         '</td>' +
         '<td data-label="Progres">' +
           (hasProgres
             ? '<span class="badge progres">' + escapeHtml(r.progres) + '</span>'
             : '<span class="badge pending">Belum ada</span>') +
-          (isAdmin
-            ? '<button class="resi-btn field-edit-btn" data-field="progres" data-id="' + r.id + '" data-nama="' + escapeAttr(r.nama) + '" data-value="' + escapeAttr(r.progres || '') + '">' +
-                (hasProgres ? 'Ubah' : 'Isi') +
-              '</button>'
-            : '') +
+          '<button class="resi-btn field-edit-btn" data-field="progres" data-id="' + r.id + '" data-nama="' + escapeAttr(r.nama) + '" data-value="' + escapeAttr(r.progres || '') + '">' +
+            (hasProgres ? 'Ubah' : 'Isi') +
+          '</button>' +
         '</td>' +
         '</tr>';
     });
@@ -1851,16 +1669,6 @@
           btn.getAttribute('data-nama'),
           btn.getAttribute('data-value')
         );
-      });
-    });
-
-    tableWrap.querySelectorAll('[data-approve-id]').forEach(function (btn) {
-      btn.addEventListener('click', function () { handleApproveReject('approve', btn.getAttribute('data-approve-id'), btn); });
-    });
-    tableWrap.querySelectorAll('[data-reject-id]').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        if (!confirm('Yakin reject request ini?')) return;
-        handleApproveReject('reject', btn.getAttribute('data-reject-id'), btn);
       });
     });
   }
@@ -1943,7 +1751,7 @@
     if (!val) { editModalInput.focus(); return; }
 
     const cfg = FIELD_CONFIG[activeEditField];
-    const payload = { action: cfg.action, id: activeEditId, adminPassword: adminPassword };
+    const payload = { action: cfg.action, id: activeEditId };
     payload[cfg.payloadKey] = val;
 
     editModalSave.disabled = true;
@@ -1955,15 +1763,10 @@
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || 'Gagal menyimpan');
 
-      if (json.stockWarnings && json.stockWarnings.length) {
-        alert('Tersimpan, tapi ada catatan stock:\n\n' + json.stockWarnings.join('\n'));
-      }
-
       editModal.classList.remove('open');
       activeEditId = null;
       activeEditField = null;
       loadRequests();
-      loadStock();
     } catch (err) {
       alert('Gagal menyimpan: ' + err.message);
     } finally {
