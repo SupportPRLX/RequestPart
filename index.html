@@ -122,6 +122,21 @@
   .admin-gate { max-width: 340px; }
   .stock-low { color: #B23A2E; font-weight: 700; }
 
+  .list-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .list-toolbar h2 { margin: 0; }
+  .toolbar-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+  .search-field input { width: auto; min-width: 180px; }
+  .sort-field { display: flex; align-items: center; gap: 8px; }
+  .sort-field label { white-space: nowrap; }
+  .sort-field select { width: auto; min-width: 150px; }
+
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -137,7 +152,7 @@
     color: #44506E;
   }
 
-  input, textarea {
+  input, textarea, select {
     border: 1px solid var(--sage-line);
     border-radius: 7px;
     padding: 9px 11px;
@@ -147,7 +162,7 @@
     color: var(--ink);
   }
 
-  input:focus, textarea:focus {
+  input:focus, textarea:focus, select:focus {
     outline: none;
     border-color: var(--gold);
     background: var(--white);
@@ -498,7 +513,21 @@
   </section>
 
   <section class="panel" id="daftarRequestPanel" style="display:none;">
-    <h2>Daftar Request</h2>
+    <div class="list-toolbar">
+      <h2>Daftar Request</h2>
+      <div class="toolbar-controls">
+        <div class="search-field">
+          <input type="text" id="staffSearchInput" placeholder="Cari nama…" autocomplete="off">
+        </div>
+        <div class="sort-field">
+          <label for="staffSortSelect">Urutkan</label>
+          <select id="staffSortSelect">
+            <option value="date_desc">Tanggal terbaru</option>
+            <option value="date_asc">Tanggal terlama</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div id="tableWrap">
       <div class="empty-state">Memuat data…</div>
     </div>
@@ -522,7 +551,21 @@
     </div>
 
     <div id="adminContent" style="display:none;">
-      <h3 class="subhead">Request Masuk</h3>
+      <div class="list-toolbar">
+        <h3 class="subhead" style="margin:0;">Request Masuk</h3>
+        <div class="toolbar-controls">
+          <div class="search-field">
+            <input type="text" id="adminSearchInput" placeholder="Cari nama…" autocomplete="off">
+          </div>
+          <div class="sort-field">
+            <label for="adminSortSelect">Urutkan</label>
+            <select id="adminSortSelect">
+              <option value="date_desc">Tanggal terbaru</option>
+              <option value="date_asc">Tanggal terlama</option>
+            </select>
+          </div>
+        </div>
+      </div>
       <div id="adminRequestsWrap"><div class="empty-state">Memuat data…</div></div>
 
       <div class="admin-block">
@@ -1733,6 +1776,71 @@
   let adminPassword = null;
   let stockModalMode = 'add'; // 'add' atau 'edit'
 
+  let lastRequestsData = [];
+  let staffSortBy = 'date_desc';
+  let adminSortBy = 'date_desc';
+  let staffSearchTerm = '';
+  let adminSearchTerm = '';
+
+  const staffSortSelect = document.getElementById('staffSortSelect');
+  const adminSortSelect = document.getElementById('adminSortSelect');
+  const staffSearchInput = document.getElementById('staffSearchInput');
+  const adminSearchInput = document.getElementById('adminSearchInput');
+
+  function sortRequests(rows, sortBy) {
+    const list = (rows || []).slice();
+    list.sort(function (a, b) {
+      const at = new Date(a.timestamp).getTime() || 0;
+      const bt = new Date(b.timestamp).getTime() || 0;
+      return sortBy === 'date_asc' ? at - bt : bt - at;
+    });
+    return list;
+  }
+
+  function filterByName(rows, term) {
+    const t = (term || '').toString().trim().toLowerCase();
+    if (!t) return rows || [];
+    return (rows || []).filter(function (r) {
+      return (r.nama || '').toString().toLowerCase().indexOf(t) !== -1;
+    });
+  }
+
+  function applyStaffView() {
+    renderTable(sortRequests(filterByName(lastRequestsData, staffSearchTerm), staffSortBy));
+  }
+
+  function applyAdminView() {
+    renderAdminRequests(sortRequests(filterByName(lastRequestsData, adminSearchTerm), adminSortBy));
+  }
+
+  if (staffSortSelect) {
+    staffSortSelect.addEventListener('change', function () {
+      staffSortBy = staffSortSelect.value;
+      applyStaffView();
+    });
+  }
+
+  if (adminSortSelect) {
+    adminSortSelect.addEventListener('change', function () {
+      adminSortBy = adminSortSelect.value;
+      applyAdminView();
+    });
+  }
+
+  if (staffSearchInput) {
+    staffSearchInput.addEventListener('input', function () {
+      staffSearchTerm = staffSearchInput.value;
+      applyStaffView();
+    });
+  }
+
+  if (adminSearchInput) {
+    adminSearchInput.addEventListener('input', function () {
+      adminSearchTerm = adminSearchInput.value;
+      applyAdminView();
+    });
+  }
+
   function isAdminUnlocked() {
     return adminContent.style.display !== 'none';
   }
@@ -1747,9 +1855,10 @@
       const res = await fetch(WEB_APP_URL);
       const json = await res.json();
       if (!json.ok) throw new Error(json.error || 'Gagal memuat data');
-      renderTable(json.data);
+      lastRequestsData = json.data || [];
+      applyStaffView();
       if (isAdminUnlocked()) {
-        renderAdminRequests(json.data);
+        applyAdminView();
         renderStockTable(json.stock || []);
       }
     } catch (err) {
